@@ -7,28 +7,31 @@ import gc
 import urllib.request
 
 # ═══════════════════════════════════════════════════
-# DnCNN Architecture (17 layers, color denoise)
+# DnCNN Architecture — match KAIR pretrained weights
+# 20 conv layers, no BatchNorm, with bias
 # ═══════════════════════════════════════════════════
 
 class DnCNN(nn.Module):
-    def __init__(self, channels=3, num_layers=17, features=64):
+    def __init__(self, channels=3, num_layers=20, features=64):
         super(DnCNN, self).__init__()
         layers = []
-        layers.append(nn.Conv2d(channels, features, 3, padding=1, bias=False))
+        # First layer: Conv + ReLU
+        layers.append(nn.Conv2d(channels, features, 3, padding=1, bias=True))
         layers.append(nn.ReLU(inplace=True))
+        # Middle layers: Conv + ReLU (no BN)
         for _ in range(num_layers - 2):
-            layers.append(nn.Conv2d(features, features, 3, padding=1, bias=False))
-            layers.append(nn.BatchNorm2d(features))
+            layers.append(nn.Conv2d(features, features, 3, padding=1, bias=True))
             layers.append(nn.ReLU(inplace=True))
-        layers.append(nn.Conv2d(features, channels, 3, padding=1, bias=False))
-        self.network = nn.Sequential(*layers)
+        # Last layer: Conv only
+        layers.append(nn.Conv2d(features, channels, 3, padding=1, bias=True))
+        self.model = nn.Sequential(*layers)
 
     def forward(self, x):
-        noise = self.network(x)
+        noise = self.model(x)
         return torch.clamp(x - noise, 0, 1)
 
 print("1. Creating DnCNN model...")
-model = DnCNN(channels=3, num_layers=17, features=64)
+model = DnCNN(channels=3, num_layers=20, features=64)
 model.eval()
 torch.set_grad_enabled(False)
 
@@ -49,7 +52,6 @@ else:
 print("   Loading weights...")
 ckpt = torch.load(WEIGHT_PATH, map_location="cpu", weights_only=False)
 
-# KAIR saves as dict with 'params' key
 if isinstance(ckpt, dict):
     if 'params' in ckpt:
         state_dict = ckpt['params']
@@ -62,7 +64,7 @@ if isinstance(ckpt, dict):
 else:
     state_dict = ckpt
 
-# Handle 'module.' prefix from DataParallel
+# Handle 'module.' prefix
 new_state_dict = {}
 for k, v in state_dict.items():
     name = k.replace('module.', '')
@@ -96,7 +98,6 @@ if os.path.exists(pf) and os.path.exists(bf):
 
     with open(pf, "r") as f:
         lines = f.readlines()
-
     for line in lines:
         line = line.strip()
         if line.startswith("Input"):
