@@ -1,0 +1,35 @@
+name: Convert DnCNN to NCNN
+
+on:
+  workflow_dispatch:
+
+jobs:
+  convert:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: |
+          pip install --upgrade pip
+          pip install "numpy==1.26.4"
+          pip install torch==2.1.0+cpu --index-url https://download.pytorch.org/whl/cpu
+          pip install pnnx
+
+      - name: Convert to NCNN
+        timeout-minutes: 15
+        run: python convert_dncnn.py
+
+      - name: Upload Files
+        uses: actions/upload-artifact@v4
+        with:
+          name: DnCNN-NCNN
+          path: |
+            dncnn.ncnn.param
+            dncnn.ncnn.bin
+          retention-days: 30
